@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Keyboard from 'react-simple-keyboard';
 import 'react-simple-keyboard/build/css/index.css';
 
@@ -11,112 +11,26 @@ interface VirtualKeyboardProps {
   disabled?: boolean;
 }
 
-const themeColors: Record<Theme, { primary: string; secondary: string; glow: string; key: string }> = {
-  emerald: {
-    primary: '#10b981',
-    secondary: '#065f46',
-    glow: 'rgba(16, 185, 129, 0.6)',
-    key: '#1a1a1a',
-  },
-  blue: {
-    primary: '#3b82f6',
-    secondary: '#1e40af',
-    glow: 'rgba(59, 130, 246, 0.6)',
-    key: '#1a1a1a',
-  },
-  rose: {
-    primary: '#f43f5e',
-    secondary: '#9f1239',
-    glow: 'rgba(244, 63, 94, 0.6)',
-    key: '#1a1a1a',
-  },
-  amber: {
-    primary: '#f59e0b',
-    secondary: '#b45309',
-    glow: 'rgba(245, 158, 11, 0.6)',
-    key: '#1a1a1a',
-  },
+const themeColors: Record<Theme, { primary: string; secondary: string; glow: string }> = {
+  emerald: { primary: '#10b981', secondary: '#065f46', glow: 'rgba(16, 185, 129, 0.5)' },
+  blue: { primary: '#3b82f6', secondary: '#1e40af', glow: 'rgba(59, 130, 246, 0.5)' },
+  rose: { primary: '#f43f5e', secondary: '#9f1239', glow: 'rgba(244, 63, 94, 0.5)' },
+  amber: { primary: '#f59e0b', secondary: '#b45309', glow: 'rgba(245, 158, 11, 0.5)' },
 };
 
-const fingerZones: Record<string, { color: string; finger: string }> = {
-  // Pinky fingers - red
-  '`': { color: '#dc2626', finger: 'pinky' }, '~': { color: '#dc2626', finger: 'pinky' },
-  '1': { color: '#dc2626', finger: 'pinky' }, '!': { color: '#dc2626', finger: 'pinky' },
-  'q': { color: '#dc2626', finger: 'pinky' }, 'Q': { color: '#dc2626', finger: 'pinky' },
-  'a': { color: '#dc2626', finger: 'pinky' }, 'A': { color: '#dc2626', finger: 'pinky' },
-  'z': { color: '#dc2626', finger: 'pinky' }, 'Z': { color: '#dc2626', finger: 'pinky' },
-  // Ring fingers - orange
-  '2': { color: '#ea580c', finger: 'ring' }, '@': { color: '#ea580c', finger: 'ring' },
-  'w': { color: '#ea580c', finger: 'ring' }, 'W': { color: '#ea580c', finger: 'ring' },
-  's': { color: '#ea580c', finger: 'ring' }, 'S': { color: '#ea580c', finger: 'ring' },
-  'x': { color: '#ea580c', finger: 'ring' }, 'X': { color: '#ea580c', finger: 'ring' },
-  // Middle fingers - yellow
-  '3': { color: '#ca8a04', finger: 'middle' }, '#': { color: '#ca8a04', finger: 'middle' },
-  'e': { color: '#ca8a04', finger: 'middle' }, 'E': { color: '#ca8a04', finger: 'middle' },
-  'd': { color: '#ca8a04', finger: 'middle' }, 'D': { color: '#ca8a04', finger: 'middle' },
-  'c': { color: '#ca8a04', finger: 'middle' }, 'C': { color: '#ca8a04', finger: 'middle' },
-  // Index fingers - green/cyan
-  '4': { color: '#16a34a', finger: 'index' }, '$': { color: '#16a34a', finger: 'index' },
-  '5': { color: '#16a34a', finger: 'index' }, '%': { color: '#16a34a', finger: 'index' },
-  'r': { color: '#16a34a', finger: 'index' }, 'R': { color: '#16a34a', finger: 'index' },
-  't': { color: '#16a34a', finger: 'index' }, 'T': { color: '#16a34a', finger: 'index' },
-  'f': { color: '#16a34a', finger: 'index' }, 'F': { color: '#16a34a', finger: 'index' },
-  'v': { color: '#16a34a', finger: 'index' }, 'V': { color: '#16a34a', finger: 'index' },
-  'g': { color: '#16a34a', finger: 'index' }, 'G': { color: '#16a34a', finger: 'index' },
-  'b': { color: '#16a34a', finger: 'index' }, 'B': { color: '#16a34a', finger: 'index' },
-  // Right index - blue
-  '6': { color: '#0891b2', finger: 'index' }, '^': { color: '#0891b2', finger: 'index' },
-  'y': { color: '#0891b2', finger: 'index' }, 'Y': { color: '#0891b2', finger: 'index' },
-  'u': { color: '#0891b2', finger: 'index' }, 'U': { color: '#0891b2', finger: 'index' },
-  'h': { color: '#0891b2', finger: 'index' }, 'H': { color: '#0891b2', finger: 'index' },
-  'j': { color: '#0891b2', finger: 'index' }, 'J': { color: '#0891b2', finger: 'index' },
-  'n': { color: '#0891b2', finger: 'index' }, 'N': { color: '#0891b2', finger: 'index' },
-  'm': { color: '#0891b2', finger: 'index' }, 'M': { color: '#0891b2', finger: 'index' },
-  // Right ring - purple
-  '7': { color: '#7c3aed', finger: 'ring' }, '&': { color: '#7c3aed', finger: 'ring' },
-  '8': { color: '#7c3aed', finger: 'ring' }, '*': { color: '#7c3aed', finger: 'ring' },
-  'i': { color: '#7c3aed', finger: 'ring' }, 'I': { color: '#7c3aed', finger: 'ring' },
-  'o': { color: '#7c3aed', finger: 'ring' }, 'O': { color: '#7c3aed', finger: 'ring' },
-  'k': { color: '#7c3aed', finger: 'ring' }, 'K': { color: '#7c3aed', finger: 'ring' },
-  ',': { color: '#7c3aed', finger: 'ring' }, '<': { color: '#7c3aed', finger: 'ring' },
-  // Right pinky - pink
-  '9': { color: '#db2777', finger: 'pinky' }, '(': { color: '#db2777', finger: 'pinky' },
-  '0': { color: '#db2777', finger: 'pinky' }, ')': { color: '#db2777', finger: 'pinky' },
-  'p': { color: '#db2777', finger: 'pinky' }, 'P': { color: '#db2777', finger: 'pinky' },
-  '[': { color: '#db2777', finger: 'pinky' }, '{': { color: '#db2777', finger: 'pinky' },
-  ']': { color: '#db2777', finger: 'pinky' }, '}': { color: '#db2777', finger: 'pinky' },
-  ';': { color: '#db2777', finger: 'pinky' }, ':': { color: '#db2777', finger: 'pinky' },
-  "'": { color: '#db2777', finger: 'pinky' }, '"': { color: '#db2777', finger: 'pinky' },
-  '\\': { color: '#db2777', finger: 'pinky' }, '|': { color: '#db2777', finger: 'pinky' },
-  '/': { color: '#db2777', finger: 'pinky' }, '?': { color: '#db2777', finger: 'pinky' },
-  '.': { color: '#db2777', finger: 'pinky' }, '>': { color: '#db2777', finger: 'pinky' },
-  '-': { color: '#db2777', finger: 'pinky' }, '_': { color: '#db2777', finger: 'pinky' },
-  '=': { color: '#db2777', finger: 'pinky' }, '+': { color: '#db2777', finger: 'pinky' },
+const fingerColors: Record<string, string> = {
+  a: '#ef4444', s: '#f97316', d: '#eab308', f: '#22c55e', g: '#14b8a6',
+  h: '#06b6d4', j: '#3b82f6', k: '#8b5cf6', l: '#a855f7',
+  q: '#ef4444', w: '#f97316', e: '#eab308', r: '#22c55e', t: '#14b8a6',
+  y: '#06b6d4', u: '#3b82f6', i: '#8b5cf6', o: '#a855f7', p: '#ec4899',
+  z: '#ef4444', x: '#f97316', c: '#eab308', v: '#22c55e', b: '#14b8a6',
+  n: '#06b6d4', m: '#3b82f6',
 };
-
-const homeRowKeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
 
 export default function VirtualKeyboard({ currentKey, nextKey, theme, disabled }: VirtualKeyboardProps) {
   const [layout, setLayout] = useState<'default' | 'shift'>('default');
   const colors = themeColors[theme];
-  
-  const layoutOptions = useMemo(() => ({
-    default: [
-      '` 1 2 3 4 5 6 7 8 9 0 - = {bksp}',
-      'tab q w e r t y u i o p [ ] \\',
-      'caps a s d f g h j k l ; \' {enter}',
-      'shift z x c v b n m , . / shift',
-      'ctrl alt space alt ctrl',
-    ],
-    shift: [
-      '~ ! @ # $ % ^ & * ( ) _ + {bksp}',
-      'tab Q W E R T Y U I O P { } |',
-      'caps A S D F G H J K L : " {enter}',
-      'shift Z X C V B N M < > ? shift',
-      'ctrl alt space alt ctrl',
-    ],
-  }), []);
-  
+
   useEffect(() => {
     const key = currentKey.toLowerCase();
     const needsShift = /[A-Z~!@#$%^&*()_+{}|:"<>?]/.test(currentKey);
@@ -127,206 +41,203 @@ export default function VirtualKeyboard({ currentKey, nextKey, theme, disabled }
 
   const getKeyStyle = (button: string): React.CSSProperties => {
     const normalizedKey = button.toLowerCase().replace(/{|}/g, '');
-    const isCurrentKey = normalizedKey === currentKey.toLowerCase();
-    const isNextKey = nextKey && normalizedKey === nextKey.toLowerCase();
-    const isHomeRow = homeRowKeys.includes(normalizedKey);
-    const fingerZone = fingerZones[button] || fingerZones[normalizedKey];
+    const isCurrentKey = normalizedKey === currentKey.toLowerCase() || button === currentKey;
+    const isNextKey = nextKey && (normalizedKey === nextKey.toLowerCase() || button === nextKey);
+    const isHomeRow = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'].includes(normalizedKey);
+    const fingerColor = fingerColors[normalizedKey];
     
     const baseStyle: React.CSSProperties = {
-      background: `linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%)`,
+      background: 'linear-gradient(180deg, #3a3a3a 0%, #1a1a1a 100%)',
       borderRadius: '6px',
-      boxShadow: '0 4px 0 #0a0a0a, 0 4px 8px rgba(0,0,0,0.3)',
-      border: '1px solid #3a3a3a',
-      transition: 'all 0.1s ease',
+      boxShadow: '0 4px 0 #0a0a0a, 0 5px 10px rgba(0,0,0,0.3)',
+      border: '1px solid #4a4a4a',
+      color: '#e5e5e5',
+      fontWeight: 500,
     };
     
     if (isCurrentKey) {
       return {
         ...baseStyle,
         background: `linear-gradient(180deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
-        boxShadow: `0 0 20px ${colors.glow}, 0 0 40px ${colors.glow}, 0 4px 0 ${colors.secondary}`,
+        boxShadow: `0 0 25px ${colors.glow}, 0 0 50px ${colors.glow}, 0 4px 0 ${colors.secondary}`,
         transform: 'translateY(2px)',
         borderColor: colors.primary,
+        color: '#fff',
+        fontWeight: 700,
       };
     }
     
     if (isNextKey) {
       return {
         ...baseStyle,
-        background: `linear-gradient(180deg, #3a3a3a 0%, #2a2a2a 100%)`,
-        boxShadow: `0 0 10px ${colors.glow}, 0 4px 0 #0a0a0a`,
+        background: 'linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 100%)',
+        boxShadow: `0 0 15px ${colors.glow}, 0 4px 0 #0a0a0a`,
         borderColor: colors.primary,
-        opacity: 0.9,
       };
     }
     
-    if (fingerZone) {
+    if (fingerColor) {
       return {
         ...baseStyle,
-        boxShadow: `0 4px 0 #0a0a0a, 0 0 8px ${fingerZone.color}40, inset 0 1px 0 ${fingerZone.color}20`,
-        borderColor: `${fingerZone.color}40`,
+        boxShadow: `0 4px 0 #0a0a0a, 0 0 8px ${fingerColor}30, inset 0 1px 0 ${fingerColor}20`,
+        borderColor: `${fingerColor}50`,
       };
     }
     
     if (isHomeRow) {
       return {
         ...baseStyle,
-        boxShadow: '0 4px 0 #0a0a0a, 0 0 15px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.1)',
-        borderColor: '#4a4a4a',
+        boxShadow: '0 4px 0 #0a0a0a, 0 0 12px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.1)',
       };
     }
     
     return baseStyle;
   };
-  
-  const customCSS = `
-    :root {
-      --hg-theme-primary: ${colors.primary};
-    }
-    
-    .hg-button {
-      height: 52px !important;
-      min-width: 44px !important;
-      border-radius: 8px !important;
-      margin: 3px 2px !important;
-      font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
-      font-weight: 500 !important;
-      font-size: 13px !important;
-      text-transform: uppercase !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      position: relative !important;
-      overflow: hidden !important;
-    }
-    
-    .hg-button::before {
-      content: '' !important;
-      position: absolute !important;
-      top: 0 !important;
-      left: 0 !important;
-      right: 0 !important;
-      height: 50% !important;
-      background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%) !important;
-      border-radius: 6px 6px 0 0 !important;
-      pointer-events: none !important;
-    }
-    
-    .hg-button:active, .hg-button-active {
-      transform: translateY(3px) !important;
-      box-shadow: 0 1px 0 #0a0a0a !important;
-    }
-    
-    .hg-button-bksp {
-      width: 90px !important;
-    }
-    
-    .hg-button-tab {
-      width: 75px !important;
-    }
-    
-    .hg-button-caps {
-      width: 85px !important;
-    }
-    
-    .hg-button-enter {
-      width: 100px !important;
-    }
-    
-    .hg-button-shift {
-      width: 105px !important;
-    }
-    
-    .hg-button-space {
-      width: 240px !important;
-    }
-    
-    .hg-button-ctrl, .hg-button-alt {
-      width: 55px !important;
-    }
-    
-    .hg-keyboard {
-      background: linear-gradient(180deg, #1f1f1f 0%, #141414 100%) !important;
-      border-radius: 16px !important;
-      padding: 16px !important;
-      box-shadow: 
-        0 20px 60px rgba(0,0,0,0.5),
-        0 0 0 1px rgba(255,255,255,0.05),
-        inset 0 1px 0 rgba(255,255,255,0.05) !important;
-    }
-    
-    .hg-rows {
-      gap: 4px !important;
-    }
-    
-    .hg-row {
-      justify-content: center !important;
-    }
-    
-    /* Special key styling */
-    .hg-button-tab, .hg-button-caps, .hg-button-shift, .hg-button-bksp, .hg-button-enter {
-      font-size: 10px !important;
-      background: linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 100%) !important;
-    }
-    
-    .hg-button-space {
-      font-size: 11px !important;
-      letter-spacing: 2px !important;
-    }
-    
-    /* Disabled state */
-    .hg-keyboard-disabled {
-      opacity: 0.5 !important;
-      pointer-events: none !important;
-    }
-  `;
+
+  const keyboardLayout = {
+    default: [
+      '` 1 2 3 4 5 6 7 8 9 0 - = {bksp}',
+      'q w e r t y u i o p [ ] \\',
+      'a s d f g h j k l ; \' {enter}',
+      'shift z x c v b n m , . / shift',
+      'ctrl alt space alt ctrl'
+    ],
+    shift: [
+      '~ ! @ # $ % ^ & * ( ) _ + {bksp}',
+      'Q W E R T Y U I O P { } |',
+      'A S D F G H J K L : " {enter}',
+      'shift Z X C V B N M < > ? shift',
+      'ctrl alt space alt ctrl'
+    ]
+  };
 
   return (
     <div className="w-full max-w-5xl mx-auto mt-6">
-      <style>{customCSS}</style>
+      <div className="relative bg-gradient-to-b from-zinc-800 to-zinc-900 rounded-2xl p-6 shadow-2xl border border-zinc-700">
+        <div className="absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-black/40 to-transparent rounded-b-2xl" />
+        
+        <Keyboard
+          layoutName={layout}
+          layout={keyboardLayout}
+          disableButtonHold
+          baseClass="simple-keyboard"
+          renderButton={(props: any) => ({
+            ...props,
+            customClass: `hg-button ${props.buttonElement?.className || ''}`,
+            customStyle: getKeyStyle(props.buttonElement?.textContent || props.buttonBase?.children?.[0]?.textContent || ''),
+          })}
+        />
+      </div>
       
-      <Keyboard
-        layoutName={layout}
-        layout={layoutOptions}
-        disableButtonHold
-        theme="hg-theme-custom"
-        baseClass={disabled ? 'hg-keyboard-disabled' : ''}
-        renderButton={(buttonProps) => {
-          const style = getKeyStyle(buttonProps.buttonElement?.textContent || buttonProps.buttonBase?.children?.[0]?.textContent || '');
-          return {
-            ...buttonProps,
-            customClass: 'hg-button-custom',
-            customStyle: style,
-          };
-        }}
-      />
-      
-      <div className="flex justify-center items-center gap-8 mt-4 text-xs">
+      <div className="flex justify-center items-center gap-6 mt-4 text-xs text-zinc-500">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full shadow-sm" style={{ background: colors.primary, boxShadow: `0 0 8px ${colors.glow}` }} />
-          <span className="text-zinc-400">Current</span>
+          <span>Current</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full" style={{ background: colors.primary, opacity: 0.5 }} />
-          <span className="text-zinc-400">Next</span>
+          <div className="w-3 h-3 rounded-full bg-zinc-500" />
+          <span>Next</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-emerald-500" />
-          <span className="text-zinc-400">Index</span>
+          <div className="w-2 h-2 rounded-sm bg-red-500" />
+          <span>Pinky</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-yellow-500" />
-          <span className="text-zinc-400">Middle</span>
+          <div className="w-2 h-2 rounded-sm bg-orange-500" />
+          <span>Ring</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-orange-500" />
-          <span className="text-zinc-400">Ring</span>
+          <div className="w-2 h-2 rounded-sm bg-yellow-500" />
+          <span>Middle</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-red-500" />
-          <span className="text-zinc-400">Pinky</span>
+          <div className="w-2 h-2 rounded-sm bg-green-500" />
+          <span>Index</span>
         </div>
       </div>
+
+      <style>{`
+        .simple-keyboard {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+        }
+        
+        .hg-rows {
+          display: flex !important;
+          justify-content: center !important;
+          gap: 6px !important;
+          margin-bottom: 6px !important;
+        }
+        
+        .hg-row {
+          display: flex !important;
+          gap: 6px !important;
+          justify-content: center !important;
+        }
+        
+        .hg-button {
+          height: 48px !important;
+          min-width: 44px !important;
+          border-radius: 8px !important;
+          margin: 0 !important;
+          font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+          font-size: 13px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          transition: all 0.08s ease !important;
+          position: relative !important;
+        }
+        
+        .hg-button::before {
+          content: '' !important;
+          position: absolute !important;
+          top: 2px !important;
+          left: 4px !important;
+          right: 4px !important;
+          height: 16px !important;
+          background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%) !important;
+          border-radius: 4px 4px 8px 8px !important;
+          pointer-events: none !important;
+        }
+        
+        .hg-button:active, .hg-button-active {
+          transform: translateY(3px) !important;
+          box-shadow: 0 1px 0 #0a0a0a !important;
+        }
+        
+        .hg-button-bksp {
+          width: 90px !important;
+        }
+        
+        .hg-button-tab {
+          width: 75px !important;
+        }
+        
+        .hg-button-caps {
+          width: 85px !important;
+        }
+        
+        .hg-button-enter {
+          width: 95px !important;
+        }
+        
+        .hg-button-shift {
+          width: 110px !important;
+          font-size: 11px !important;
+        }
+        
+        .hg-button-space {
+          width: 280px !important;
+        }
+        
+        .hg-button-ctrl, .hg-button-alt {
+          width: 60px !important;
+          font-size: 11px !important;
+        }
+      `}</style>
     </div>
   );
 }

@@ -5,93 +5,124 @@ export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
 interface SnippetResult {
   code: string;
-  source: 'local' | 'github' | 'generated';
+  source: 'local' | 'gists';
   language: string;
 }
 
-const GITHUB_API_DELAY = 2000;
-let lastApiCall = 0;
+const CODE_EXTENSIONS: Record<string, string[]> = {
+  javascript: ['.js', '.jsx', '.mjs', '.cjs'],
+  typescript: ['.ts', '.tsx', '.mts', '.cts'],
+  python: ['.py', '.pyw', '.pyx'],
+  rust: ['.rs'],
+  go: ['.go'],
+  cpp: ['.cpp', '.cc', '.cxx', '.hpp', '.h'],
+  c: ['.c', '.h'],
+};
 
-async function rateLimit(): Promise<void> {
+const LANGUAGE_EXTENSIONS: Record<string, string> = {
+  js: 'javascript', jsx: 'javascript',
+  ts: 'typescript', tsx: 'typescript',
+  py: 'python',
+  rs: 'rust',
+  go: 'go',
+  cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp', h: 'c',
+  c: 'c',
+};
+
+const GITHUB_GISTS_DELAY = 1000;
+let lastGistsCall = 0;
+
+async function rateLimitGists(): Promise<void> {
   const now = Date.now();
-  const timeSinceLastCall = now - lastApiCall;
-  if (timeSinceLastCall < GITHUB_API_DELAY) {
-    await new Promise(resolve => setTimeout(resolve, GITHUB_API_DELAY - timeSinceLastCall));
+  const timeSinceLastCall = now - lastGistsCall;
+  if (timeSinceLastCall < GITHUB_GISTS_DELAY) {
+    await new Promise(resolve => setTimeout(resolve, GITHUB_GISTS_DELAY - timeSinceLastCall));
   }
-  lastApiCall = Date.now();
+  lastGistsCall = Date.now();
 }
 
-function cleanCodeSnippet(code: string): string {
-  let cleaned = code
-    .replace(/^\s*import\s+.*$/gm, '')
-    .replace(/^\s*export\s+/gm, '')
-    .replace(/^\s*require\s*\([^)]+\)\s*;?\s*$/gm, '')
-    .replace(/^\s*#include\s*<[^>]+>\s*$/gm, '')
-    .replace(/^\s*using\s+namespace\s+std\s*;?\s*$/gm, '')
-    .trim();
+function getCodeFiles(files: Record<string, any>): { filename: string; content: string; language: string } | null {
+  const codeFiles: { filename: string; content: string; language: string }[] = [];
   
-  const lines = cleaned.split('\n').filter(line => line.trim().length > 0);
-  
-  if (lines.length > 10) {
-    cleaned = lines.slice(0, 10).join('\n');
+  for (const [filename, fileData] of Object.entries(files)) {
+    const ext = '.' + filename.split('.').pop()?.toLowerCase();
+    const lang = LANGUAGE_EXTENSIONS[ext] || LANGUAGE_EXTENSIONS[filename.split('.').pop() || ''];
+    
+    if (lang && fileData?.content && fileData.content.length > 20 && fileData.content.length < 5000) {
+      const lines = fileData.content.split('\n').filter((l: string) => l.trim().length > 0);
+      if (lines.length >= 3) {
+        codeFiles.push({
+          filename,
+          content: fileData.content,
+          language: lang,
+        });
+      }
+    }
   }
   
-  return cleaned.length > 200 ? cleaned.slice(0, 200) : cleaned;
+  if (codeFiles.length === 0) return null;
+  
+  return codeFiles[Math.floor(Math.random() * codeFiles.length)];
 }
 
-async function fetchFromGitHub(language: string): Promise<string | null> {
+async function fetchFromGists(targetLanguage: string): Promise<{ code: string; language: string } | null> {
   try {
-    await rateLimit();
-    
-    const langMap: Record<string, string> = {
-      javascript: 'javascript',
-      typescript: 'typescript',
-      python: 'python',
-      rust: 'rust',
-      go: 'go',
-      c: 'c',
-      cpp: 'c++',
-    };
-    
-    const queryLang = langMap[language] || 'javascript';
-    const query = `language:${queryLang}+extension:${language === 'cpp' ? 'cpp' : language}`;
+    await rateLimitGists();
     
     const response = await fetch(
-      `https://api.github.com/search/code?q=${encodeURIComponent(query)}&per_page=30&sort=indexed`,
-      {
-        headers: {
-          'Accept': 'application/vnd.github.v3+json',
-        },
-      }
+      `https://api.github.com/gists/public?per_page=30`
     );
     
     if (!response.ok) {
-      console.warn('GitHub API error:', response.status);
       return null;
     }
     
-    const data = await response.json();
+    const gists = await response.json();
     
-    if (!data.items || data.items.length === 0) {
+    if (!Array.isArray(gists) || gists.length === 0) {
       return null;
     }
     
-    const randomItem = data.items[Math.floor(Math.random() * Math.min(10, data.items.length))];
-    
-    const fileResponse = await fetch(randomItem.url, {
-      headers: {
-        'Accept': 'application/vnd.github.v3.raw',
-      },
+    const filteredGists = gists.filter((gist: any) => {
+      const files = gist.files || {};
+      return Object.keys(files).some(filename => {
+        const ext = '.' + filename.split('.').pop()?.toLowerCase();
+        const lang = LANGUAGE_EXTENSIONS[ext];
+        if (targetLanguage === 'javascript' || targetLanguage === 'typescript') {
+          return ['javascript', 'typescript'].includes(lang);
+        }
+        return lang === targetLanguage;
+      });
     });
     
-    if (!fileResponse.ok) {
+    if (filteredGists.length === 0) {
+      const anyCodeGists = gists.filter((gist: any) => {
+        const files = gist.files || {};
+        return Object.keys(files).some(filename => {
+          const ext = '.' + filename.split('.').pop()?.toLowerCase();
+          return LANGUAGE_EXTENSIONS[ext];
+        });
+      });
+      
+      if (anyCodeGists.length === 0) return null;
+      
+      const randomGist = anyCodeGists[Math.floor(Math.random() * anyCodeGists.length)];
+      const codeFile = getCodeFiles(randomGist.files);
+      if (codeFile) {
+        return { code: codeFile.content.slice(0, 500), language: codeFile.language };
+      }
       return null;
     }
     
-    const content = await fileResponse.text();
-    return cleanCodeSnippet(content);
+    const randomGist = filteredGists[Math.floor(Math.random() * filteredGists.length)];
+    const codeFile = getCodeFiles(randomGist.files);
+    
+    if (codeFile) {
+      return { code: codeFile.content.slice(0, 500), language: codeFile.language };
+    }
+    
+    return null;
   } catch (error) {
-    console.warn('GitHub fetch error:', error);
     return null;
   }
 }
@@ -135,8 +166,14 @@ export async function getSnippet(
   }
   
   if (language === 'warmup') {
+    const warmupTypes = ['chars', 'pseudo'];
+    const type = warmupTypes[Math.floor(Math.random() * warmupTypes.length)];
+    
+    if (type === 'pseudo') {
+      return { code: generatePseudoWord(20), source: 'gists', language: 'warmup' };
+    }
     const snippet = getRandomCharSet(difficulty);
-    return { code: snippet, source: 'generated', language: 'warmup' };
+    return { code: snippet, source: 'gists', language: 'warmup' };
   }
   
   if (language === 'custom') {
@@ -152,18 +189,15 @@ export async function getSnippet(
   
   const localSnippet = snippets[difficulty][Math.floor(Math.random() * snippets[difficulty].length)];
   
-  if (!useApi) {
-    return { code: localSnippet, source: 'local', language };
-  }
-  
-  try {
-    const githubSnippet = await fetchFromGitHub(language);
-    
-    if (githubSnippet && githubSnippet.length > 10) {
-      return { code: githubSnippet, source: 'github', language };
+  if (useApi) {
+    try {
+      const gistResult = await fetchFromGists(language);
+      if (gistResult && gistResult.code.length > 20) {
+        return { code: gistResult.code, source: 'gists', language: gistResult.language };
+      }
+    } catch (error) {
+      console.warn('Gists fetch failed, using local:', error);
     }
-  } catch (error) {
-    console.warn('API fetch failed, using local:', error);
   }
   
   return { code: localSnippet, source: 'local', language };
