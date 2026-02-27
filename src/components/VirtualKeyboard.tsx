@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import Keyboard from 'react-simple-keyboard';
-import 'react-simple-keyboard/build/css/index.css';
 
 type Theme = 'emerald' | 'blue' | 'rose' | 'amber';
 
@@ -27,106 +25,214 @@ const fingerColors: Record<string, string> = {
   n: '#06b6d4', m: '#3b82f6',
 };
 
+interface KeyProps {
+  label: string;
+  width?: number;
+  isCurrent: boolean;
+  isNext: boolean;
+  fingerColor?: string;
+  isHomeRow: boolean;
+  colors: { primary: string; secondary: string; glow: string };
+}
+
+function Key({ label, width = 44, isCurrent, isNext, fingerColor, isHomeRow, colors }: KeyProps) {
+  const baseStyle: React.CSSProperties = {
+    width: `${width}px`,
+    height: '48px',
+    background: 'linear-gradient(180deg, #3a3a3a 0%, #1a1a1a 100%)',
+    borderRadius: '6px',
+    boxShadow: '0 4px 0 #0a0a0a, 0 5px 10px rgba(0,0,0,0.3)',
+    border: '1px solid #4a4a4a',
+    color: '#e5e5e5',
+    fontWeight: 500,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '13px',
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    transition: 'all 0.08s ease',
+    position: 'relative',
+    flexShrink: 0,
+  };
+
+  let style = { ...baseStyle };
+
+  if (isCurrent) {
+    style = {
+      ...style,
+      background: `linear-gradient(180deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
+      boxShadow: `0 0 25px ${colors.glow}, 0 0 50px ${colors.glow}, 0 4px 0 ${colors.secondary}`,
+      transform: 'translateY(2px)',
+      borderColor: colors.primary,
+      color: '#fff',
+      fontWeight: 700,
+      zIndex: 10,
+    };
+  } else if (isNext) {
+    style = {
+      ...style,
+      background: 'linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 100%)',
+      boxShadow: `0 0 15px ${colors.glow}, 0 4px 0 #0a0a0a`,
+      borderColor: colors.primary,
+    };
+  } else if (fingerColor) {
+    style = {
+      ...style,
+      boxShadow: `0 4px 0 #0a0a0a, 0 0 8px ${fingerColor}30, inset 0 1px 0 ${fingerColor}20`,
+      borderColor: `${fingerColor}50`,
+    };
+  } else if (isHomeRow) {
+    style = {
+      ...style,
+      boxShadow: '0 4px 0 #0a0a0a, 0 0 12px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.1)',
+    };
+  }
+
+  return (
+    <div style={style}>
+      <div style={{
+        position: 'absolute',
+        top: '2px',
+        left: '4px',
+        right: '4px',
+        height: '16px',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%)',
+        borderRadius: '4px 4px 8px 8px',
+        pointerEvents: 'none',
+      }} />
+      {label}
+    </div>
+  );
+}
+
+function KeyRow({ keys, offset = 0, currentKey, nextKey, colors }: {
+  keys: { label: string; width?: number; code?: string }[];
+  offset?: number;
+  currentKey: string;
+  nextKey?: string;
+  colors: { primary: string; secondary: string; glow: string };
+}) {
+  const homeRowKeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
+
+  return (
+    <div
+      className="flex gap-1.5"
+      style={{
+        marginLeft: `${offset}px`,
+        marginBottom: '6px',
+      }}
+    >
+      {keys.map((key, idx) => {
+        const keyLabel = key.code || key.label.toLowerCase();
+        const isCurrent = keyLabel === currentKey.toLowerCase() || key.label === currentKey;
+        const isNext = nextKey && (keyLabel === nextKey.toLowerCase() || key.label === nextKey);
+        const fingerColor = fingerColors[keyLabel] || fingerColors[key.label.toLowerCase()];
+        const isHomeRow = homeRowKeys.includes(keyLabel) || homeRowKeys.includes(key.label.toLowerCase());
+
+        return (
+          <Key
+            key={`${key.label}-${idx}`}
+            label={key.label}
+            width={key.width}
+            isCurrent={isCurrent}
+            isNext={isNext || false}
+            fingerColor={fingerColor}
+            isHomeRow={isHomeRow}
+            colors={colors}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 export default function VirtualKeyboard({ currentKey, nextKey, theme, disabled }: VirtualKeyboardProps) {
-  const [layout, setLayout] = useState<'default' | 'shift'>('default');
+  const [isShift, setIsShift] = useState(false);
   const colors = themeColors[theme];
 
   useEffect(() => {
-    const key = currentKey.toLowerCase();
-    const needsShift = /[A-Z~!@#$%^&*()_+{}|:"<>?]/.test(currentKey);
-    if (needsShift && layout === 'default') {
-      setLayout('shift');
+    const key = currentKey;
+    const needsShift = /[A-Z~!@#$%^&*()_+{}|:"<>?]/.test(key);
+    if (needsShift && !isShift) {
+      setIsShift(true);
+    } else if (!needsShift && isShift) {
+      setIsShift(false);
     }
-  }, [currentKey, layout]);
+  }, [currentKey, isShift]);
 
-  const getKeyStyle = (button: string): React.CSSProperties => {
-    const normalizedKey = button.toLowerCase().replace(/{|}/g, '');
-    const isCurrentKey = normalizedKey === currentKey.toLowerCase() || button === currentKey;
-    const isNextKey = nextKey && (normalizedKey === nextKey.toLowerCase() || button === nextKey);
-    const isHomeRow = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'].includes(normalizedKey);
-    const fingerColor = fingerColors[normalizedKey];
-    
-    const baseStyle: React.CSSProperties = {
-      background: 'linear-gradient(180deg, #3a3a3a 0%, #1a1a1a 100%)',
-      borderRadius: '6px',
-      boxShadow: '0 4px 0 #0a0a0a, 0 5px 10px rgba(0,0,0,0.3)',
-      border: '1px solid #4a4a4a',
-      color: '#e5e5e5',
-      fontWeight: 500,
-    };
-    
-    if (isCurrentKey) {
-      return {
-        ...baseStyle,
-        background: `linear-gradient(180deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
-        boxShadow: `0 0 25px ${colors.glow}, 0 0 50px ${colors.glow}, 0 4px 0 ${colors.secondary}`,
-        transform: 'translateY(2px)',
-        borderColor: colors.primary,
-        color: '#fff',
-        fontWeight: 700,
-      };
-    }
-    
-    if (isNextKey) {
-      return {
-        ...baseStyle,
-        background: 'linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 100%)',
-        boxShadow: `0 0 15px ${colors.glow}, 0 4px 0 #0a0a0a`,
-        borderColor: colors.primary,
-      };
-    }
-    
-    if (fingerColor) {
-      return {
-        ...baseStyle,
-        boxShadow: `0 4px 0 #0a0a0a, 0 0 8px ${fingerColor}30, inset 0 1px 0 ${fingerColor}20`,
-        borderColor: `${fingerColor}50`,
-      };
-    }
-    
-    if (isHomeRow) {
-      return {
-        ...baseStyle,
-        boxShadow: '0 4px 0 #0a0a0a, 0 0 12px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.1)',
-      };
-    }
-    
-    return baseStyle;
-  };
+  const row1 = isShift
+    ? ['~', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+'].map(l => ({ label: l, width: 44 }))
+    : ['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='].map(l => ({ label: l, width: 44 }));
 
-  const keyboardLayout = {
-    default: [
-      '` 1 2 3 4 5 6 7 8 9 0 - = {bksp}',
-      'q w e r t y u i o p [ ] \\',
-      'a s d f g h j k l ; \' {enter}',
-      'shift z x c v b n m , . / shift',
-      'ctrl alt space alt ctrl'
-    ],
-    shift: [
-      '~ ! @ # $ % ^ & * ( ) _ + {bksp}',
-      'Q W E R T Y U I O P { } |',
-      'A S D F G H J K L : " {enter}',
-      'shift Z X C V B N M < > ? shift',
-      'ctrl alt space alt ctrl'
-    ]
-  };
+  const row1Bksp = { label: '←', width: 90, code: '{bksp}' };
+
+  const row2Keys = isShift
+    ? ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '|'].map(l => ({ label: l, width: 44 }))
+    : ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\'].map(l => ({ label: l, width: 44 }));
+
+  const row3Keys = isShift
+    ? ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"'].map(l => ({ label: l, width: 44 }))
+    : ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'"].map(l => ({ label: l, width: 44 }));
+
+  const row3Enter = { label: 'Enter', width: 90, code: '{enter}' };
+
+  const row4Keys = isShift
+    ? ['Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?'].map(l => ({ label: l, width: 44 }))
+    : ['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/'].map(l => ({ label: l, width: 44 }));
+
+  const row4Shift = { label: 'Shift', width: 110, code: 'shift' };
+
+  const row5Ctrl = { label: 'Ctrl', width: 60, code: 'ctrl' };
+  const row5Alt = { label: 'Alt', width: 60, code: 'alt' };
+  const row5Space = { label: '', width: 280, code: ' ' };
+  const row5Win = { label: 'Win', width: 50, code: 'win' };
 
   return (
     <div className="w-full max-w-5xl mx-auto mt-6">
       <div className="relative bg-gradient-to-b from-zinc-800 to-zinc-900 rounded-2xl p-6 shadow-2xl border border-zinc-700">
         <div className="absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-black/40 to-transparent rounded-b-2xl" />
         
-        <Keyboard
-          layoutName={layout}
-          layout={keyboardLayout}
-          disableButtonHold
-          baseClass="simple-keyboard"
-          renderButton={(props: any) => ({
-            ...props,
-            customClass: `hg-button ${props.buttonElement?.className || ''}`,
-            customStyle: getKeyStyle(props.buttonElement?.textContent || props.buttonBase?.children?.[0]?.textContent || ''),
-          })}
-        />
+        <div className="flex flex-col items-center">
+          <KeyRow
+            keys={[...row1, row1Bksp]}
+            offset={0}
+            currentKey={currentKey}
+            nextKey={nextKey}
+            colors={colors}
+          />
+          
+          <KeyRow
+            keys={row2Keys}
+            offset={20}
+            currentKey={currentKey}
+            nextKey={nextKey}
+            colors={colors}
+          />
+          
+          <KeyRow
+            keys={[...row3Keys, row3Enter]}
+            offset={35}
+            currentKey={currentKey}
+            nextKey={nextKey}
+            colors={colors}
+          />
+          
+          <KeyRow
+            keys={[row4Shift, ...row4Keys, row4Shift]}
+            offset={15}
+            currentKey={currentKey}
+            nextKey={nextKey}
+            colors={colors}
+          />
+          
+          <KeyRow
+            keys={[row5Ctrl, row5Alt, row5Win, row5Space, row5Win, row5Alt, row5Ctrl]}
+            offset={60}
+            currentKey={currentKey}
+            nextKey={nextKey}
+            colors={colors}
+          />
+        </div>
       </div>
       
       <div className="flex justify-center items-center gap-6 mt-4 text-xs text-zinc-500">
@@ -155,89 +261,6 @@ export default function VirtualKeyboard({ currentKey, nextKey, theme, disabled }
           <span>Index</span>
         </div>
       </div>
-
-      <style>{`
-        .simple-keyboard {
-          background: transparent !important;
-          border: none !important;
-          box-shadow: none !important;
-          padding: 0 !important;
-        }
-        
-        .hg-rows {
-          display: flex !important;
-          justify-content: center !important;
-          gap: 6px !important;
-          margin-bottom: 6px !important;
-        }
-        
-        .hg-row {
-          display: flex !important;
-          gap: 6px !important;
-          justify-content: center !important;
-        }
-        
-        .hg-button {
-          height: 48px !important;
-          min-width: 44px !important;
-          border-radius: 8px !important;
-          margin: 0 !important;
-          font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
-          font-size: 13px !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          transition: all 0.08s ease !important;
-          position: relative !important;
-        }
-        
-        .hg-button::before {
-          content: '' !important;
-          position: absolute !important;
-          top: 2px !important;
-          left: 4px !important;
-          right: 4px !important;
-          height: 16px !important;
-          background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%) !important;
-          border-radius: 4px 4px 8px 8px !important;
-          pointer-events: none !important;
-        }
-        
-        .hg-button:active, .hg-button-active {
-          transform: translateY(3px) !important;
-          box-shadow: 0 1px 0 #0a0a0a !important;
-        }
-        
-        .hg-button-bksp {
-          width: 90px !important;
-        }
-        
-        .hg-button-tab {
-          width: 75px !important;
-        }
-        
-        .hg-button-caps {
-          width: 85px !important;
-        }
-        
-        .hg-button-enter {
-          width: 95px !important;
-        }
-        
-        .hg-button-shift {
-          width: 110px !important;
-          font-size: 11px !important;
-        }
-        
-        .hg-button-space {
-          width: 280px !important;
-        }
-        
-        .hg-button-ctrl, .hg-button-alt {
-          width: 60px !important;
-          font-size: 11px !important;
-        }
-      `}</style>
     </div>
   );
 }
