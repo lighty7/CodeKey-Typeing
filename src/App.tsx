@@ -17,12 +17,20 @@ import {
   Cpu,
   Braces,
   BarChart3,
-  Shuffle
+  Shuffle,
+  Hash,
+  Database,
+  FileCode,
+  Palette,
+  Clock,
+  Infinity,
+  Coffee,
+  Gem
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import confetti from 'canvas-confetti';
 import { getSnippet, Language, DifficultyLevel, getAvailableLanguages } from './lib/snippets-api';
-import { saveSession, getSetting, setSetting } from './lib/storage';
+import { saveSession, getSetting, setSetting, getStats, checkAndUnlockAchievements, saveErrorPattern, getTodayChallenge, completeDailyChallenge, DailyChallenge } from './lib/storage';
 import VirtualKeyboard from './components/VirtualKeyboard';
 import ProgressPage from './pages/ProgressPage';
 
@@ -30,8 +38,10 @@ type Theme = 'emerald' | 'blue' | 'rose' | 'amber';
 
 interface SettingsState {
   sound: boolean;
+  volume: number;
   difficulty: 'standard' | 'hardcore';
   theme: Theme;
+  timeLimit: number;
 }
 
 interface Stats {
@@ -60,8 +70,10 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [settings, setSettings] = useState<SettingsState>({
     sound: true,
+    volume: 0.2,
     difficulty: 'standard',
     theme: 'emerald',
+    timeLimit: 60,
   });
   const [stats, setStats] = useState<Stats>({
     wpm: 0,
@@ -78,6 +90,7 @@ export default function App() {
   const [customCode, setCustomCode] = useState('');
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [realTimeWpm, setRealTimeWpm] = useState(0);
+  const [dailyChallenge, setDailyChallenge] = useState<DailyChallenge | null>(null);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -90,45 +103,65 @@ export default function App() {
 
   const fetchSnippet = useCallback(async (lang: Language, custom?: string, targetLevel: DifficultyLevel = 'easy') => {
     setIsLoading(true);
-    if (lang === 'custom' && custom) {
-      setSnippet(custom);
-    } else {
-      const result = await getSnippet(lang, targetLevel, true);
-      let newSnippet = result.code;
-      
-      if (newSnippet === lastSnippetRef.current && lang !== 'custom') {
-        const altResult = await getSnippet(lang, targetLevel, false);
-        newSnippet = altResult.code;
+    try {
+      if (lang === 'custom' && custom) {
+        setSnippet(custom);
+      } else {
+        const result = await getSnippet(lang, targetLevel, true);
+        let newSnippet = result.code;
+        
+        if (!newSnippet || (newSnippet === lastSnippetRef.current && lang !== 'custom')) {
+          const altResult = await getSnippet(lang, targetLevel, false);
+          newSnippet = altResult.code;
+        }
+        
+        if (!newSnippet) {
+          newSnippet = 'console.log("Hello World");';
+        }
+        
+        lastSnippetRef.current = newSnippet;
+        setSnippet(newSnippet);
       }
-      
-      lastSnippetRef.current = newSnippet;
-      setSnippet(newSnippet);
+      setUserInput('');
+      setIsFinished(false);
+      setRealTimeWpm(0);
+      const isZen = settings.timeLimit === 0;
+      setStats({
+        wpm: 0,
+        accuracy: 100,
+        errors: 0,
+        totalChars: 0,
+        startTime: null,
+        endTime: null,
+        timeLeft: isZen ? 9999 : settings.timeLimit,
+      });
+    } catch (error) {
+      console.error('Failed to fetch snippet:', error);
+      setSnippet('console.log("Hello World");');
+      setUserInput('');
+      setIsFinished(false);
+    } finally {
+      setIsLoading(false);
     }
-    setUserInput('');
-    setIsFinished(false);
-    setRealTimeWpm(0);
-    setStats({
-      wpm: 0,
-      accuracy: 100,
-      errors: 0,
-      totalChars: 0,
-      startTime: null,
-      endTime: null,
-      timeLeft: 60,
-    });
-    setIsLoading(false);
-  }, []);
+  }, [settings.timeLimit]);
 
   useEffect(() => {
     const loadSettings = async () => {
       const savedTheme = await getSetting('theme', 'emerald');
       const savedSound = await getSetting('sound', true);
+      const savedVolume = await getSetting('volume', 0.2);
       const savedDifficulty = await getSetting('difficulty', 'standard');
+      const savedTimeLimit = await getSetting('timeLimit', 60);
       setSettings({
         theme: savedTheme as Theme,
         sound: savedSound as boolean,
+        volume: savedVolume as number,
         difficulty: savedDifficulty as 'standard' | 'hardcore',
+        timeLimit: savedTimeLimit as number,
       });
+      
+      const challenge = await getTodayChallenge();
+      setDailyChallenge(challenge);
     };
     loadSettings();
   }, []);
@@ -143,7 +176,7 @@ export default function App() {
   }, [language, fetchSnippet]);
 
   useEffect(() => {
-    if (stats.startTime && !isFinished && stats.timeLeft > 0) {
+    if (stats.startTime && !isFinished && stats.timeLeft > 0 && settings.timeLimit > 0) {
       timerRef.current = setInterval(() => {
         setStats(prev => {
           if (prev.timeLeft <= 1) {
@@ -159,7 +192,7 @@ export default function App() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [stats.startTime, isFinished, stats.timeLeft]);
+  }, [stats.startTime, isFinished, stats.timeLeft, settings.timeLimit]);
 
   useEffect(() => {
     if (stats.startTime && !isFinished) {
@@ -202,9 +235,9 @@ export default function App() {
   const playClick = useCallback(() => {
     if (!settings.sound) return;
     const audio = new Audio('https://www.soundjay.com/button/button-16.mp3');
-    audio.volume = 0.2;
+    audio.volume = settings.volume;
     audio.play().catch(() => {});
-  }, [settings.sound]);
+  }, [settings.sound, settings.volume]);
 
   const saveSessionToHistory = useCallback(async () => {
     if (!stats.startTime || !snippet) return;
@@ -213,7 +246,7 @@ export default function App() {
       ? Math.round((stats.endTime - stats.startTime) / 1000)
       : Math.round((Date.now() - stats.startTime) / 1000);
 
-    await saveSession({
+    const session = await saveSession({
       date: Date.now(),
       language,
       difficulty: level,
@@ -224,7 +257,31 @@ export default function App() {
       charactersTyped: snippet.length,
       theme: settings.theme,
     });
-  }, [stats, snippet, language, level, settings.theme]);
+    
+    const currentStats = await getStats();
+    const languages = LANGUAGES.map(l => l.id);
+    await checkAndUnlockAchievements(session, {
+      totalSessions: currentStats.totalSessions,
+      currentStreak: currentStats.currentStreak,
+      languages,
+    });
+    
+    if (dailyChallenge && !dailyChallenge.completed) {
+      let completed = false;
+      if (dailyChallenge.type === 'speed' && stats.wpm >= dailyChallenge.target) {
+        completed = true;
+      } else if (dailyChallenge.type === 'accuracy' && stats.accuracy >= dailyChallenge.target) {
+        completed = true;
+      } else if (dailyChallenge.type === 'language' && language === dailyChallenge.language) {
+        completed = true;
+      }
+      
+      if (completed) {
+        const updated = await completeDailyChallenge(dailyChallenge);
+        setDailyChallenge(updated);
+      }
+    }
+  }, [stats, snippet, language, level, settings.theme, dailyChallenge]);
 
   const reset = useCallback(async () => {
     if (isFinished) {
@@ -238,7 +295,7 @@ export default function App() {
     }
     
     setLevel(nextLevel);
-    fetchSnippet(language, customCode, nextLevel);
+    await fetchSnippet(language, customCode, nextLevel);
   }, [fetchSnippet, language, customCode, level, isFinished, saveSessionToHistory]);
 
   useEffect(() => {
@@ -275,13 +332,19 @@ export default function App() {
     if (e.key.length === 1) {
       playClick();
       const nextInput = userInput + e.key;
+      const expectedChar = snippet[userInput.length];
       
-      if (settings.difficulty === 'hardcore' && e.key !== snippet[userInput.length]) {
+      if (settings.difficulty === 'hardcore' && e.key !== expectedChar) {
         setUserInput('');
         setStats(prev => ({ ...prev, errors: prev.errors + 1 }));
+        saveErrorPattern(expectedChar, e.key, userInput.length).catch(() => {});
         return;
       }
 
+      if (e.key !== expectedChar) {
+        saveErrorPattern(expectedChar, e.key, userInput.length).catch(() => {});
+      }
+      
       setUserInput(nextInput);
 
       if (stats.startTime) {
@@ -325,6 +388,17 @@ export default function App() {
     await setSetting('sound', sound);
   };
 
+  const handleVolumeChange = async (volume: number) => {
+    setSettings(s => ({ ...s, volume }));
+    await setSetting('volume', volume);
+  };
+
+  const handleTimeLimitChange = async (timeLimit: number) => {
+    setSettings(s => ({ ...s, timeLimit }));
+    await setSetting('timeLimit', timeLimit);
+    setStats(prev => ({ ...prev, timeLeft: timeLimit === 0 ? 9999 : timeLimit }));
+  };
+
   if (currentPage === 'progress') {
     return <ProgressPage theme={settings.theme} onBack={() => setCurrentPage('practice')} />;
   }
@@ -357,12 +431,21 @@ export default function App() {
             </div>
           </div>
 
+          {dailyChallenge && !dailyChallenge.completed && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full">
+              <Trophy className="w-3 h-3 text-amber-400" />
+              <span className="text-[10px] text-amber-400 font-medium">
+                Daily: {dailyChallenge.type === 'speed' ? `${dailyChallenge.target}+ WPM` : dailyChallenge.type === 'accuracy' ? `${dailyChallenge.target}% Accuracy` : `${dailyChallenge.language} practice`}
+              </span>
+            </div>
+          )}
+
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-6 px-6 py-3 bg-zinc-900/50 rounded-2xl border border-zinc-800/50 backdrop-blur-sm">
               <div className="flex flex-col items-center">
                 <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-tighter">TIME</span>
-                <span className={cn("text-xl font-mono font-bold", stats.timeLeft < 10 ? "text-rose-500 animate-pulse" : "text-zinc-100")}>
-                  {stats.timeLeft}s
+                <span className={cn("text-xl font-mono font-bold", stats.timeLeft < 10 && settings.timeLimit > 0 ? "text-rose-500 animate-pulse" : "text-zinc-100")}>
+                  {settings.timeLimit === 0 ? '∞' : stats.timeLeft > 0 ? `${stats.timeLeft}s` : '0s'}
                 </span>
               </div>
               <div className="w-px h-8 bg-zinc-800" />
@@ -428,6 +511,12 @@ export default function App() {
               {lang.id === 'go' && <Code2 className="w-4 h-4" />}
               {lang.id === 'cpp' && <Cpu className="w-4 h-4" />}
               {lang.id === 'c' && <Code2 className="w-4 h-4" />}
+              {lang.id === 'java' && <Coffee className="w-4 h-4" />}
+              {lang.id === 'csharp' && <Hash className="w-4 h-4" />}
+              {lang.id === 'ruby' && <Gem className="w-4 h-4" />}
+              {lang.id === 'sql' && <Database className="w-4 h-4" />}
+              {lang.id === 'html' && <FileCode className="w-4 h-4" />}
+              {lang.id === 'css' && <Palette className="w-4 h-4" />}
               {lang.id === 'random' && <Shuffle className="w-4 h-4" />}
               {lang.id === 'custom' && <Settings className="w-4 h-4" />}
               {lang.name}
@@ -738,6 +827,50 @@ export default function App() {
                       />
                     </div>
                   </button>
+                  {settings.sound && (
+                    <div className="mt-3 px-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-zinc-400">Volume</span>
+                        <span className="text-xs text-zinc-500 font-mono">{Math.round(settings.volume * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={settings.volume}
+                        onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                        className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 block">Time Limit</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 15, label: '15s' },
+                      { value: 30, label: '30s' },
+                      { value: 60, label: '60s' },
+                      { value: 120, label: '2m' },
+                      { value: 0, label: 'Zen', icon: Infinity },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => handleTimeLimitChange(option.value)}
+                        className={cn(
+                          "p-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1",
+                          settings.timeLimit === option.value 
+                            ? "bg-emerald-500 text-black" 
+                            : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                        )}
+                      >
+                        {option.icon && <option.icon className="w-3 h-3" />}
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>

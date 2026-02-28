@@ -13,12 +13,17 @@ A modern, developer-focused typing practice application built with React, TypeSc
 
 ## Features
 
-- **Code Snippets Practice** - Type real code in multiple programming languages (JavaScript, TypeScript, Python, Rust, Go, and more)
+- **Code Snippets Practice** - Type real code in multiple programming languages (JavaScript, TypeScript, Python, Rust, Go, C/C++, Java, C#, Ruby, SQL, HTML/CSS, and more)
 - **Virtual Keyboard** - Visual keyboard with staggered QWERTY layout showing finger positioning
 - **Real-time Stats** - Live WPM (Words Per Minute) and accuracy tracking
+- **Adjustable Time Limits** - Choose from 15s, 30s, 60s, 2min, or Zen (unlimited) mode
 - **Progress Dashboard** - Charts showing your improvement over time
 - **Session History** - Track and review past typing sessions
 - **Customizable Themes** - Choose from multiple color themes (Emerald, Blue, Rose, Amber)
+- **Sound Effects** - Adjustable volume mechanical click sounds
+- **Error Analysis** - Track and analyze common typing mistakes
+- **Achievements** - Unlock badges for milestones (speed, accuracy, streaks, etc.)
+- **Daily Challenges** - Special daily goals to keep you motivated
 - **Local Storage** - All progress stored locally in IndexedDB
 
 ## Getting Started

@@ -1,6 +1,6 @@
 import { LEVELED_SNIPPETS } from '../constants';
 
-export type Language = 'javascript' | 'python' | 'cpp' | 'c' | 'typescript' | 'rust' | 'go' | 'warmup' | 'custom' | 'random';
+export type Language = 'javascript' | 'python' | 'cpp' | 'c' | 'typescript' | 'rust' | 'go' | 'warmup' | 'custom' | 'random' | 'java' | 'csharp' | 'ruby' | 'sql' | 'html' | 'css';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
 interface SnippetResult {
@@ -17,6 +17,12 @@ const CODE_EXTENSIONS: Record<string, string[]> = {
   go: ['.go'],
   cpp: ['.cpp', '.cc', '.cxx', '.hpp', '.h'],
   c: ['.c', '.h'],
+  java: ['.java'],
+  csharp: ['.cs'],
+  ruby: ['.rb', '.erb'],
+  sql: ['.sql'],
+  html: ['.html', '.htm'],
+  css: ['.css', '.scss', '.sass', '.less'],
 };
 
 const LANGUAGE_EXTENSIONS: Record<string, string> = {
@@ -160,7 +166,7 @@ export async function getSnippet(
   useApi: boolean = true
 ): Promise<SnippetResult> {
   if (language === 'random') {
-    const languages: Language[] = ['javascript', 'typescript', 'python', 'rust', 'go', 'cpp'];
+    const languages: Language[] = ['javascript', 'typescript', 'python', 'rust', 'go', 'cpp', 'java', 'csharp', 'ruby', 'sql', 'html', 'css'];
     const randomLang = languages[Math.floor(Math.random() * languages.length)];
     return getSnippet(randomLang, difficulty, useApi);
   }
@@ -213,6 +219,12 @@ export function getAvailableLanguages(): { id: Language; name: string }[] {
     { id: 'go', name: 'Go' },
     { id: 'cpp', name: 'C++' },
     { id: 'c', name: 'C' },
+    { id: 'java', name: 'Java' },
+    { id: 'csharp', name: 'C#' },
+    { id: 'ruby', name: 'Ruby' },
+    { id: 'sql', name: 'SQL' },
+    { id: 'html', name: 'HTML' },
+    { id: 'css', name: 'CSS' },
     { id: 'random', name: 'Random' },
   ];
 }
